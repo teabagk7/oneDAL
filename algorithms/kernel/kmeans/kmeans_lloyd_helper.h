@@ -34,6 +34,7 @@
 #include "externals/service_blas.h"
 #include "externals/service_spblas.h"
 #include "service/kernel/service_data_utils.h"
+#include "service/service_environment.h"
 
 namespace daal
 {
@@ -85,7 +86,7 @@ struct TlsTask
         }
     }
 
-    static TlsTask<algorithmFPType, cpu> * create(int dim, int clNum, int maxBlockSize)
+    static TlsTask<algorithmFPType, cpu> * create(const size_t dim, const size_t clNum, const size_t maxBlockSize)
     {
         TlsTask<algorithmFPType, cpu> * result = new TlsTask<algorithmFPType, cpu>(dim, clNum, maxBlockSize);
         if (!result)
@@ -108,7 +109,62 @@ struct TlsTask
     algorithmFPType * cValues = nullptr;
     size_t * cIndices         = nullptr;
 };
+template <typename algorithmFPtype, CpuType cpu>
+struct BSHelper;
+template <CpuType cpu>
+struct BSHelper<double, cpu>
+{
+    static size_t kmeansGetBlockSize(const size_t nRows, const size_t dim, const size_t clNum)
+    {
+        size_t rows_fit_L1 = (getL1CacheSize() / 8 - (clNum * dim)) / (clNum + dim) * 0.8;
+        size_t rows_fit_L2 = (getL2CacheSize() / 8 - (clNum * dim)) / (clNum + dim) * 0.8;
+        size_t blockSize   = 96;
 
+        if (rows_fit_L1 >= 256 && rows_fit_L1 <= 512)
+        {
+            blockSize = int(rows_fit_L1 / 16) * 16;
+        }
+        else if (rows_fit_L2 >= 8 && rows_fit_L2 <= 512)
+        {
+            blockSize = int(rows_fit_L2 / 8) * 8;
+        }
+        else if (rows_fit_L2 >= 512)
+        {
+            blockSize = 496;
+        }
+
+        blockSize = int(rows / (int(rows / blockSize / 56) * 56));
+
+        return blockSize;
+    }
+};
+
+template <CpuType cpu>
+struct BSHelper<float, cpu>
+{
+    static size_t kmeansGetBlockSize(const size_t nRows, const size_t dim, const size_t clNum)
+    {
+        size_t rows_fit_L1 = (getL1CacheSize() / 4 - (clNum * dim)) / (clNum + dim) * 0.8;
+        size_t rows_fit_L2 = (getL2CacheSize() / 4 - (clNum * dim)) / (clNum + dim) * 0.8;
+        size_t blockSize   = 96;
+
+        if (rows_fit_L1 >= 256 * 2 && rows_fit_L1 <= 512 * 2)
+        {
+            blockSize = int(rows_fit_L1 / 16) * 16;
+        }
+        else if (rows_fit_L2 >= 8 && rows_fit_L2 <= 512 * 2)
+        {
+            blockSize = int(rows_fit_L2 / 8) * 8;
+        }
+        else if (rows_fit_L2 >= 512 * 2)
+        {
+            blockSize = 496 * 2;
+        }
+        blockSize = int(rows / (int(rows / blockSize / 56) * 56));
+
+        return blockSize;
+    }
+};
 template <typename algorithmFPType>
 struct Fp2IntSize
 {};
