@@ -34,7 +34,7 @@
 #include "externals/service_blas.h"
 #include "externals/service_spblas.h"
 #include "service/kernel/service_data_utils.h"
-#include "service/service_environment.h"
+#include "service/kernel/service_environment.h"
 
 namespace daal
 {
@@ -110,61 +110,99 @@ struct TlsTask
     size_t * cIndices         = nullptr;
 };
 template <typename algorithmFPtype, CpuType cpu>
-struct BSHelper;
-template <CpuType cpu>
-struct BSHelper<double, cpu>
+struct BSHelper
 {
     static size_t kmeansGetBlockSize(const size_t nRows, const size_t dim, const size_t clNum)
     {
-        size_t rows_fit_L1 = (getL1CacheSize() / 8 - (clNum * dim)) / (clNum + dim) * 0.8;
-        size_t rows_fit_L2 = (getL2CacheSize() / 8 - (clNum * dim)) / (clNum + dim) * 0.8;
-        size_t blockSize   = 96;
+        float cacheFullness      = 0.8f;
+        size_t fpTypeMultiplier  = sizeof(double) / sizeof(algorithmFPtype);
+        size_t maxRowsPerBlock   = 512 * fpTypeMultiplier;
+        size_t minRowsPerBlockL1 = 256 * fpTypeMultiplier;
+        size_t minRowsPerBlockL2 = 8;
+        size_t rowsFitL1         = (getL1CacheSize() / sizeof(algorithmFPtype) - (clNum * dim)) / (clNum + dim) * cacheFullness;
+        size_t rowsFitL2         = (getL2CacheSize() / sizeof(algorithmFPtype) - (clNum * dim)) / (clNum + dim) * cacheFullness;
+        // Default blockSize value is 96.
+        size_t blockSize = 96;
 
-        if (rows_fit_L1 >= 256 && rows_fit_L1 <= 512)
+        size_t coreAmount = Environment::getInstance()->getNumberOfThreads();
+
+        if (rowsFitL1 >= minRowsPerBlockL1 && rowsFitL1 <= maxRowsPerBlock)
         {
-            blockSize = int(rows_fit_L1 / 16) * 16;
+            // blockSize = static_cast<size_t>(rowsFitL1 / 16) * 16;
+            blockSize = rowsFitL1;
         }
-        else if (rows_fit_L2 >= 8 && rows_fit_L2 <= 512)
+        else if (rowsFitL2 >= minRowsPerBlockL2 && rowsFitL2 <= maxRowsPerBlock)
         {
-            blockSize = int(rows_fit_L2 / 8) * 8;
+            // blockSize = static_cast<size_t>(rowsFitL2 / 8) * 8;
+            blockSize = rowsFitL2;
         }
-        else if (rows_fit_L2 >= 512)
+        else if (rowsFitL2 >= maxRowsPerBlock)
         {
-            blockSize = 496;
+            // blockSize = 496 * fpTypeMultiplier ;
+            blockSize = maxRowsPerBlock;
         }
 
-        blockSize = int(rows / (int(rows / blockSize / 56) * 56));
+        blockSize = static_cast<size_t>(nRows / (static_cast<size_t>(nRows / blockSize / coreAmount) * coreAmount));
 
         return blockSize;
     }
 };
+// template <CpuType cpu>
+// struct BSHelper<double, cpu>
+// {
+//     static size_t kmeansGetBlockSize(const size_t nRows, const size_t dim, const size_t clNum)
+//     {
+//         float cacheFullness    = 0.8f;
+//         size_t maxRowsPerBlock = 512;
+//         size_t rowsFitL1       = (getL1CacheSize() / 8 - (clNum * dim)) / (clNum + dim) * 0.8;
+//         size_t rowsFitL2       = (getL2CacheSize() / 8 - (clNum * dim)) / (clNum + dim) * 0.8;
+//         size_t blockSize       = 96;
 
-template <CpuType cpu>
-struct BSHelper<float, cpu>
-{
-    static size_t kmeansGetBlockSize(const size_t nRows, const size_t dim, const size_t clNum)
-    {
-        size_t rows_fit_L1 = (getL1CacheSize() / 4 - (clNum * dim)) / (clNum + dim) * 0.8;
-        size_t rows_fit_L2 = (getL2CacheSize() / 4 - (clNum * dim)) / (clNum + dim) * 0.8;
-        size_t blockSize   = 96;
+//         if (rows_fit_L1 >= 256 && rows_fit_L1 <= 512)
+//         {
+//             blockSize = int(rows_fit_L1 / 16) * 16;
+//         }
+//         else if (rows_fit_L2 >= 8 && rows_fit_L2 <= 512)
+//         {
+//             blockSize = int(rows_fit_L2 / 8) * 8;
+//         }
+//         else if (rows_fit_L2 >= 512)
+//         {
+//             blockSize = 496;
+//         }
 
-        if (rows_fit_L1 >= 256 * 2 && rows_fit_L1 <= 512 * 2)
-        {
-            blockSize = int(rows_fit_L1 / 16) * 16;
-        }
-        else if (rows_fit_L2 >= 8 && rows_fit_L2 <= 512 * 2)
-        {
-            blockSize = int(rows_fit_L2 / 8) * 8;
-        }
-        else if (rows_fit_L2 >= 512 * 2)
-        {
-            blockSize = 496 * 2;
-        }
-        blockSize = int(rows / (int(rows / blockSize / 56) * 56));
+//         blockSize = int(rows / (int(rows / blockSize / 56) * 56));
 
-        return blockSize;
-    }
-};
+//         return blockSize;
+//     }
+// };
+
+// template <CpuType cpu>
+// struct BSHelper<float, cpu>
+// {
+//     static size_t kmeansGetBlockSize(const size_t nRows, const size_t dim, const size_t clNum)
+//     {
+//         size_t rows_fit_L1 = (getL1CacheSize() / 4 - (clNum * dim)) / (clNum + dim) * 0.8;
+//         size_t rows_fit_L2 = (getL2CacheSize() / 4 - (clNum * dim)) / (clNum + dim) * 0.8;
+//         size_t blockSize   = 96;
+
+//         if (rows_fit_L1 >= 256 * 2 && rows_fit_L1 <= 512 * 2)
+//         {
+//             blockSize = int(rows_fit_L1 / 16) * 16;
+//         }
+//         else if (rows_fit_L2 >= 8 && rows_fit_L2 <= 512 * 2)
+//         {
+//             blockSize = int(rows_fit_L2 / 8) * 8;
+//         }
+//         else if (rows_fit_L2 >= 512 * 2)
+//         {
+//             blockSize = 496 * 2;
+//         }
+//         blockSize = int(rows / (int(rows / blockSize / 56) * 56));
+
+//         return blockSize;
+//     }
+// };
 template <typename algorithmFPType>
 struct Fp2IntSize
 {};

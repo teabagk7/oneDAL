@@ -62,7 +62,7 @@ template <typename algorithmFPType, CpuType cpu>
 struct PostProcessing<lloydDense, algorithmFPType, cpu>
 {
     // const static size_t blockSizeDefault = 512;
-    using Hepler = BShelper<algorithmFPType, cpu>;
+    using Helper = BSHelper<algorithmFPType, cpu>;
     static Status computeAssignments(const size_t p, const size_t nClusters, const algorithmFPType * const inClusters, const NumericTable * ntData,
                                      algorithmFPType * catCoef, NumericTable * ntAssign)
     {
@@ -144,8 +144,9 @@ struct PostProcessing<lloydDense, algorithmFPType, cpu>
                                                 const NumericTable * const ntData, const algorithmFPType * const catCoef, NumericTable * ntAssign,
                                                 algorithmFPType & objectiveFunction)
     {
-        const size_t n       = ntData->getNumberOfRows();
-        const size_t nBlocks = n / blockSizeDefault + !!(n % blockSizeDefault);
+        const size_t n                = ntData->getNumberOfRows();
+        const size_t blockSizeDefault = Helper::kmeansGetBlockSize(n, p, nClusters);
+        const size_t nBlocks          = n / blockSizeDefault + !!(n % blockSizeDefault);
 
         TArrayScalable<algorithmFPType, cpu> goalLocal(nBlocks);
         algorithmFPType * goalLocalData = goalLocal.get();
