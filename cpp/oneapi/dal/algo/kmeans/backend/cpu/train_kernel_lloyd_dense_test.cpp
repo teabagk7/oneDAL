@@ -15,8 +15,9 @@
 *******************************************************************************/
 
 #include "gtest/gtest.h"
-#include "oneapi/dal/algo/kmeans.hpp"
-#include "oneapi/dal/data/accessor.hpp"
+#include "oneapi/dal/algo/kmeans/infer.hpp"
+#include "oneapi/dal/algo/kmeans/train.hpp"
+#include "oneapi/dal/table/row_accessor.hpp"
 
 using namespace oneapi::dal;
 
@@ -32,7 +33,7 @@ TEST(kmeans_lloyd_dense_cpu, train_results) {
 
     const float centroids[] = { -1.5, -1.5, 1.5, 1.5 };
 
-    const auto data_table = homogen_table{ row_count, column_count, data };
+    const auto data_table = homogen_table::wrap(data, row_count, column_count);
 
     const auto kmeans_desc = kmeans::descriptor<>()
                                  .set_cluster_count(cluster_count)
@@ -61,11 +62,7 @@ TEST(kmeans_lloyd_dense_cpu, infer_results) {
     const float data[] = { 1.0,  1.0,  2.0,  2.0,  1.0,  2.0,  2.0,  1.0,
                            -1.0, -1.0, -1.0, -2.0, -2.0, -1.0, -2.0, -2.0 };
 
-    const int labels[] = { 1, 1, 1, 1, 0, 0, 0, 0 };
-
-    const float centroids[] = { -1.5, -1.5, 1.5, 1.5 };
-
-    const auto data_table = homogen_table{ row_count, column_count, data };
+    const auto data_table = homogen_table::wrap(data, row_count, column_count);
 
     const auto kmeans_desc = kmeans::descriptor<>()
                                  .set_cluster_count(cluster_count)
@@ -77,7 +74,7 @@ TEST(kmeans_lloyd_dense_cpu, infer_results) {
     constexpr std::int64_t infer_row_count = 9;
     const float data_infer[]               = { 1.0, 1.0,  0.0, 1.0,  1.0,  0.0,  2.0, 2.0,  7.0,
                                  0.0, -1.0, 0.0, -5.0, -5.0, -5.0, 0.0, -2.0, 1.0 };
-    const auto data_infer_table = homogen_table{ infer_row_count, column_count, data_infer };
+    const auto data_infer_table = homogen_table::wrap(data_infer, infer_row_count, column_count);
 
     const int infer_labels[] = { 1, 1, 1, 1, 1, 0, 0, 0, 0 };
 
